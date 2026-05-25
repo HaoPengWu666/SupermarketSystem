@@ -1,0 +1,16 @@
+release/databasemanager.o
+release/inventory_widget.o
+release/logindialog.o
+release/main.o
+release/mainwindow.o
+release/member_widget.o
+release/report_widget.o
+release/saleswidget.o
+release/qrc_icons.o
+release/moc_databasemanager.o
+release/moc_inventory_widget.o
+release/moc_logindialog.o
+release/moc_mainwindow.o
+release/moc_member_widget.o
+release/moc_report_widget.o
+release/moc_saleswidget.o

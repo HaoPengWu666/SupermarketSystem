@@ -1,0 +1,16 @@
+debug/databasemanager.o
+debug/inventory_widget.o
+debug/logindialog.o
+debug/main.o
+debug/mainwindow.o
+debug/member_widget.o
+debug/report_widget.o
+debug/saleswidget.o
+debug/qrc_icons.o
+debug/moc_databasemanager.o
+debug/moc_inventory_widget.o
+debug/moc_logindialog.o
+debug/moc_mainwindow.o
+debug/moc_member_widget.o
+debug/moc_report_widget.o
+debug/moc_saleswidget.o
