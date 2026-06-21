@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from docx import Document
-from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
@@ -10,7 +10,7 @@ from docx.shared import Cm, Pt
 ROOT = Path(__file__).resolve().parents[2]
 PROJECT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "软件工程课程设计报告.docx"
-OUTPUT = ROOT / "软件工程课程设计报告-完善版.docx"
+OUTPUT = ROOT / "软件工程课程设计报告-完善版（图片修复）.docx"
 SCREENSHOTS = PROJECT / "docs" / "screenshots"
 
 
@@ -76,6 +76,11 @@ def replace_text(paragraph, text):
 def add_image(paragraph, image_path, alt_text):
     clear_paragraph(paragraph)
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    # 图片段落不能继承正文的“固定值 20 磅”，否则 WPS 会把嵌入型图片裁成一条细线。
+    paragraph.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+    paragraph.paragraph_format.line_spacing = 1.0
+    paragraph.paragraph_format.space_before = Pt(0)
+    paragraph.paragraph_format.space_after = Pt(0)
     paragraph.paragraph_format.keep_with_next = True
     run = paragraph.add_run()
     shape = run.add_picture(str(image_path), width=Cm(14.6))
@@ -125,6 +130,14 @@ for p in doc.paragraphs:
         if marker in p.text:
             add_image(p, SCREENSHOTS / filename, alt)
             break
+
+# 同时修复模板中原有图片段落，避免任何图片继续继承固定行距。
+for p in doc.paragraphs:
+    if p._p.xpath(".//w:drawing") or p._p.xpath(".//w:pict"):
+        p.paragraph_format.line_spacing_rule = WD_LINE_SPACING.SINGLE
+        p.paragraph_format.line_spacing = 1.0
+        p.paragraph_format.space_before = Pt(0)
+        p.paragraph_format.space_after = Pt(0)
 
 # 统一现有图题格式。
 for p in doc.paragraphs:
