@@ -378,7 +378,7 @@ void inventory_widget::on_stock_in_clicked()
                 if (quantity > 0 && price > 0) {
                     QJsonObject itemObj;
                     itemObj["条码"] = barcode;
-                    itemObj["名称"] = barcode;
+                    itemObj["名称"] = name;
                     itemObj["规格"] = size;
                     itemObj["进价"] = price;
                     itemObj["零售价"] = price*1.2;
@@ -400,32 +400,65 @@ void inventory_widget::on_stock_in_clicked()
 
         qDebug() << "准备传入的JSON数据:" << jsonStr;
 
-        QSqlQuery query;
+        QSqlDatabase db = DatabaseManager::instance().database();
+        if (!db.transaction()) {
+            QMessageBox::critical(this, "错误", "无法开始进货事务: " + db.lastError().text());
+            return;
+        }
+
+        QSqlQuery query(db);
         query.prepare("CALL 处理进货(?, ?, ?)");
         int userId = DatabaseManager::instance().currentUserId();
         if(userId <= 0) {
+            db.rollback();
             QMessageBox::critical(this, "错误", "无效的用户ID，请重新登录");
             return;
         }
         query.bindValue(0, userId);
         if(supplierId <= 0) {
+            db.rollback();
             QMessageBox::critical(this, "错误", "请选择有效的供应商");
             return;
         }
         query.bindValue(1, supplierId);
         query.bindValue(2, jsonStr);
 
-        if (query.exec()) {
-            // 确保所有结果集都被读取
-            do {
-                while (query.next()) {}  // 读取当前结果集的所有行
-            } while (query.nextResult()); // 移动到下一个结果集
-
-            QMessageBox::information(this, "成功", "进货操作已完成");
-            // refresh(); // 刷新界面
-        } else {
-            QMessageBox::critical(this, "错误", "进货失败: " + query.lastError().text());
+        if (!query.exec()) {
+            const QString errorText = query.lastError().text();
+            query.finish();
+            db.rollback();
+            QMessageBox::critical(this, "错误", "进货失败: " + errorText);
+            return;
         }
+
+        if (!query.next()) {
+            const QString errorText = query.lastError().text();
+            query.finish();
+            db.rollback();
+            QMessageBox::critical(this, "错误", "进货过程未返回进货单号: " + errorText);
+            return;
+        }
+
+        const int stockInId = query.value(0).toInt();
+        const double total = query.value(1).toDouble();
+
+        while (query.next()) {}
+        while (query.nextResult()) {
+            while (query.next()) {}
+        }
+        query.finish();
+
+        if (!db.commit()) {
+            const QString errorText = db.lastError().text();
+            db.rollback();
+            QMessageBox::critical(this, "错误", "进货事务提交失败: " + errorText);
+            return;
+        }
+
+        QMessageBox::information(this, "成功",
+                                 QString("进货操作已完成\n进货单号: %1\n总金额: %2")
+                                     .arg(stockInId).arg(total));
+        refresh();
     }
 }
 

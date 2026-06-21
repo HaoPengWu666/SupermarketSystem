@@ -385,77 +385,77 @@ void SalesWidget::onCheckout()
         paymentMethod = cbxPayment->currentText();
     }
 
-    // 开始事务
-    QSqlDatabase::database().transaction();
-
-    try {
-        // 调用存储过程
-        QSqlQuery query;
-        query.prepare("CALL 处理销售(?, ?, ?, ?)");
-        query.bindValue(0, currentUserId);
-        query.bindValue(1, memberId == -1 ? QVariant() : memberId);
-        query.bindValue(2, paymentMethod);
-        query.bindValue(3, itemsJson);
-
-        if (!query.exec()) {
-            // 回滚事务
-            QSqlDatabase::database().rollback();
-
-            // 检查是否是库存不足错误
-            if (query.lastError().text().contains("商品库存不足")) {
-                QMessageBox::warning(this, "库存不足",
-                                     "某些商品库存不足，请检查库存后重试");
-            } else {
-                QMessageBox::critical(this, "错误",
-                                      "销售处理失败: " + query.lastError().text());
-            }
-            return;
-        }
-
-        // 尝试移除显式事务，像第一个代码那样让存储过程自己管理事务
-        // 或者确保存储过程能适应外部事务
-
-        // 或者改为这样调用：
-        QSqlDatabase::database().transaction();
-        if (query.exec()) {
-            QSqlDatabase::database().commit();
-        } else {
-            QSqlDatabase::database().rollback();
-        }
-
-        // 执行成功后的处理
-        query.exec("SELECT 销售单号, 总金额 FROM 销售单表 ORDER BY 销售单号 DESC LIMIT 1");
-        if (query.next()) {
-            int saleId = query.value(0).toInt();
-            double total = query.value(1).toDouble();
-
-            // 更新前端商品模型的库存数量
-            for (int i = 0; i < m_cartModel->rowCount(); ++i) {
-                QString barcode = m_cartModel->item(i, 0)->text();
-                int quantity = m_cartModel->item(i, 3)->text().toInt();
-
-                for (int j = 0; j < m_productModel->rowCount(); ++j) {
-                    if (m_productModel->item(j, 0)->text() == barcode) {
-                        int currentStock = m_productModel->item(j, 4)->text().toInt();
-                        m_productModel->item(j, 4)->setText(QString::number(currentStock - quantity));
-                        break;
-                    }
-                }
-            }
-
-            // 清空购物车
-            m_cartModel->removeRows(0, m_cartModel->rowCount());
-
-            QMessageBox::information(this, "成功",
-                                     QString("销售完成!\n销售单号: %1\n总金额: %2")
-                                         .arg(saleId).arg(total));
-            refresh();
-        }
-    } catch (...) {
-        // 回滚事务
-        QSqlDatabase::database().rollback();
-        QMessageBox::critical(this, "错误", "销售处理过程中发生异常");
+    QSqlDatabase db = DatabaseManager::instance().database();
+    if (!db.transaction()) {
+        QMessageBox::critical(this, "错误", "无法开始销售事务: " + db.lastError().text());
+        return;
     }
+
+    // 每次结算只调用一次存储过程。处理完所有结果集后再提交事务，
+    // 避免 QMYSQL 出现 Commands out of sync 或数据延迟一单的问题。
+    QSqlQuery query(db);
+    query.prepare("CALL 处理销售(?, ?, ?, ?)");
+    query.bindValue(0, currentUserId);
+    query.bindValue(1, memberId == -1 ? QVariant() : memberId);
+    query.bindValue(2, paymentMethod);
+    query.bindValue(3, itemsJson);
+
+    if (!query.exec()) {
+        const QString errorText = query.lastError().text();
+        query.finish();
+        db.rollback();
+        if (errorText.contains("商品库存不足")) {
+            QMessageBox::warning(this, "库存不足", "某些商品库存不足，请检查库存后重试");
+        } else {
+            QMessageBox::critical(this, "错误", "销售处理失败: " + errorText);
+        }
+        return;
+    }
+
+    if (!query.next()) {
+        const QString errorText = query.lastError().text();
+        query.finish();
+        db.rollback();
+        QMessageBox::critical(this, "错误", "销售过程未返回销售单号: " + errorText);
+        return;
+    }
+
+    const int saleId = query.value(0).toInt();
+    const double total = query.value(1).toDouble();
+
+    // 读取并释放 CALL 产生的全部结果集后，连接才能安全执行下一条命令。
+    while (query.next()) {}
+    while (query.nextResult()) {
+        while (query.next()) {}
+    }
+    query.finish();
+
+    if (!db.commit()) {
+        const QString errorText = db.lastError().text();
+        db.rollback();
+        QMessageBox::critical(this, "错误", "销售事务提交失败: " + errorText);
+        return;
+    }
+
+    // 更新前端商品模型的库存数量
+    for (int i = 0; i < m_cartModel->rowCount(); ++i) {
+        const QString barcode = m_cartModel->item(i, 0)->text();
+        const int quantity = m_cartModel->item(i, 3)->text().toInt();
+
+        for (int j = 0; j < m_productModel->rowCount(); ++j) {
+            if (m_productModel->item(j, 0)->text() == barcode) {
+                const int currentStock = m_productModel->item(j, 4)->text().toInt();
+                m_productModel->item(j, 4)->setText(QString::number(currentStock - quantity));
+                break;
+            }
+        }
+    }
+
+    m_cartModel->removeRows(0, m_cartModel->rowCount());
+    QMessageBox::information(this, "成功",
+                             QString("销售完成!\n销售单号: %1\n总金额: %2")
+                                 .arg(saleId).arg(total));
+    refresh();
 }
 
 void SalesWidget::onMemberChecked(bool checked)
