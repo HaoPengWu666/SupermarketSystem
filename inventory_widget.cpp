@@ -2,6 +2,7 @@
 #include "databasemanager.h"
 #include "logindialog.h"
 #include <QSqlQuery>
+#include <QSqlRecord>
 #include <QMessageBox>
 #include <QTableView>
 #include <QComboBox>
@@ -431,22 +432,34 @@ void inventory_widget::on_stock_in_clicked()
             return;
         }
 
-        if (!query.next()) {
-            const QString errorText = query.lastError().text();
-            query.finish();
+        int stockInId = -1;
+        double total = 0.0;
+        bool resultFound = false;
+
+        do {
+            const QSqlRecord record = query.record();
+            const int stockInIdColumn = record.indexOf("进货单号");
+            const int totalColumn = record.indexOf("总金额");
+
+            while (query.next()) {
+                if (!resultFound && stockInIdColumn >= 0 && totalColumn >= 0) {
+                    stockInId = query.value(stockInIdColumn).toInt();
+                    total = query.value(totalColumn).toDouble();
+                    resultFound = true;
+                }
+            }
+        } while (query.nextResult());
+
+        const QString resultError = query.lastError().text();
+        query.finish();
+
+        if (!resultFound || stockInId <= 0) {
             db.rollback();
-            QMessageBox::critical(this, "错误", "进货过程未返回进货单号: " + errorText);
+            QMessageBox::critical(this, "错误",
+                                  QString("进货过程未返回有效进货单号") +
+                                      (resultError.isEmpty() ? QString() : QString(": ") + resultError));
             return;
         }
-
-        const int stockInId = query.value(0).toInt();
-        const double total = query.value(1).toDouble();
-
-        while (query.next()) {}
-        while (query.nextResult()) {
-            while (query.next()) {}
-        }
-        query.finish();
 
         if (!db.commit()) {
             const QString errorText = db.lastError().text();

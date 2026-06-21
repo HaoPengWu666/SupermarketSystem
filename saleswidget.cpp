@@ -3,6 +3,7 @@
 #include "mainwindow.h"
 #include "databasemanager.h"
 #include <QSqlQuery>
+#include <QSqlRecord>
 #include <QMessageBox>
 #include <QJsonArray>
 #include <QJsonObject>
@@ -412,23 +413,36 @@ void SalesWidget::onCheckout()
         return;
     }
 
-    if (!query.next()) {
-        const QString errorText = query.lastError().text();
-        query.finish();
+    int saleId = -1;
+    double total = 0.0;
+    bool resultFound = false;
+
+    // QMYSQL 可能先返回空结果集，真正的销售单号位于后续结果集。
+    // 逐个结果集查找明确的返回列，同时把所有结果完整读完。
+    do {
+        const QSqlRecord record = query.record();
+        const int saleIdColumn = record.indexOf("销售单号");
+        const int totalColumn = record.indexOf("总金额");
+
+        while (query.next()) {
+            if (!resultFound && saleIdColumn >= 0 && totalColumn >= 0) {
+                saleId = query.value(saleIdColumn).toInt();
+                total = query.value(totalColumn).toDouble();
+                resultFound = true;
+            }
+        }
+    } while (query.nextResult());
+
+    const QString resultError = query.lastError().text();
+    query.finish();
+
+    if (!resultFound || saleId <= 0) {
         db.rollback();
-        QMessageBox::critical(this, "错误", "销售过程未返回销售单号: " + errorText);
+        QMessageBox::critical(this, "错误",
+                              QString("销售过程未返回有效销售单号") +
+                                  (resultError.isEmpty() ? QString() : QString(": ") + resultError));
         return;
     }
-
-    const int saleId = query.value(0).toInt();
-    const double total = query.value(1).toDouble();
-
-    // 读取并释放 CALL 产生的全部结果集后，连接才能安全执行下一条命令。
-    while (query.next()) {}
-    while (query.nextResult()) {
-        while (query.next()) {}
-    }
-    query.finish();
 
     if (!db.commit()) {
         const QString errorText = db.lastError().text();
