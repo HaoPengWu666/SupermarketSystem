@@ -838,6 +838,13 @@ QStackedWidget {
             </property>
            </widget>
           </item>
+          <item>
+           <widget class="QPushButton" name="btnDeleteMember_m">
+            <property name="text">
+             <string>删除会员</string>
+            </property>
+           </widget>
+          </item>
          </layout>
         </item>
         <item>
@@ -1082,6 +1089,13 @@ QStackedWidget {
            <widget class="QPushButton" name="btnEditProduct_in">
             <property name="text">
              <string>编辑商品</string>
+            </property>
+           </widget>
+          </item>
+          <item>
+           <widget class="QPushButton" name="btnDeleteProduct_in">
+            <property name="text">
+             <string>删除商品</string>
             </property>
            </widget>
           </item>

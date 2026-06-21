@@ -1,0 +1,30 @@
+# Qt Creator / qmake
+*.pro.user
+*.pro.user.*
+.qmake.stash
+Makefile
+Makefile.*
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+
+# Build output
+build/
+debug/
+release/
+*.o
+*.obj
+*.exe
+*.dll
+*.a
+
+# Editor / OS
+.vscode/
+.idea/
+.codex/
+.DS_Store
+Thumbs.db
+
+# Local configuration and secrets
+*.local
+.env

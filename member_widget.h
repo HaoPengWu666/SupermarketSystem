@@ -19,6 +19,7 @@ private slots:
     void on_search_member();
     void on_add_member_clicked();
     void on_edit_member_clicked();
+    void on_delete_member_clicked();
     void on_refresh_clicked();
 
 private:

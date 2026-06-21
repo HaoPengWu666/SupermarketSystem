@@ -107,11 +107,13 @@ void inventory_widget::setup_connections()
     // 操作按钮
     auto *btnStockIn = m_inventory_page->findChild<QPushButton*>("btnStockIn_in");
     auto *btnEdit = m_inventory_page->findChild<QPushButton*>("btnEditProduct_in");
+    auto *btnDelete = m_inventory_page->findChild<QPushButton*>("btnDeleteProduct_in");
     auto *btnAdd = m_inventory_page->findChild<QPushButton*>("btnAddProduct_in");
     auto *btnRefresh = m_inventory_page->findChild<QPushButton*>("btnRefresh_in");
 
     if (btnStockIn) connect(btnStockIn, &QPushButton::clicked, this, &inventory_widget::on_stock_in_clicked);
     if (btnEdit) connect(btnEdit, &QPushButton::clicked, this, &inventory_widget::on_edit_product_clicked);
+    if (btnDelete) connect(btnDelete, &QPushButton::clicked, this, &inventory_widget::on_delete_product_clicked);
     if (btnAdd) connect(btnAdd, &QPushButton::clicked, this, &inventory_widget::on_add_product_clicked);
     if (btnRefresh) connect(btnRefresh, &QPushButton::clicked, this, &inventory_widget::on_refresh_clicked);
 }
@@ -441,6 +443,44 @@ void inventory_widget::on_edit_product_clicked()
 
     QString barcode = m_inventory_model->item(selected.first().row(), 0)->text();
     show_product_dialog(true, barcode);
+}
+
+void inventory_widget::on_delete_product_clicked()
+{
+    auto *tblInventory = m_inventory_page->findChild<QTableView*>("tblInventory_in");
+    if (!tblInventory || !tblInventory->selectionModel()) return;
+
+    const QModelIndexList selected = tblInventory->selectionModel()->selectedRows();
+    if (selected.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择要删除的商品");
+        return;
+    }
+
+    const int row = selected.first().row();
+    const QString barcode = m_inventory_model->item(row, 0)->text();
+    const QString productName = m_inventory_model->item(row, 1)->text();
+    const auto answer = QMessageBox::question(
+        this,
+        "确认删除商品",
+        QString("确定要删除商品“%1”（条码：%2）吗？\n此操作不可撤销。")
+            .arg(productName, barcode),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+    if (answer != QMessageBox::Yes) return;
+
+    QSqlQuery query;
+    query.prepare("CALL 删除商品(?)");
+    query.addBindValue(barcode);
+    if (!query.exec()) {
+        QMessageBox::critical(this, "删除失败", query.lastError().text());
+        return;
+    }
+    do {
+        while (query.next()) {}
+    } while (query.nextResult());
+
+    QMessageBox::information(this, "删除成功", "商品已删除");
+    refresh();
 }
 
 void inventory_widget::on_add_product_clicked()

@@ -421,6 +421,42 @@ END //
 DELIMITER ;
 
 
+-- 安全删除商品：保留已经产生进货或销售历史的商品
+DELIMITER //
+CREATE PROCEDURE 删除商品(IN p_商品条码 VARCHAR(20))
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM 商品表 WHERE 商品条码 = p_商品条码) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '商品不存在或已被删除';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM 销售明细表 WHERE 商品条码 = p_商品条码)
+       OR EXISTS (SELECT 1 FROM 进货明细表 WHERE 商品条码 = p_商品条码) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = '该商品已有销售或进货记录，为保证历史数据完整性不能删除';
+    END IF;
+
+    DELETE FROM 商品表 WHERE 商品条码 = p_商品条码;
+END //
+DELIMITER ;
+
+-- 安全删除会员：保留已经产生消费历史的会员
+DELIMITER //
+CREATE PROCEDURE 删除会员(IN p_会员ID INT)
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM 会员表 WHERE 会员ID = p_会员ID) THEN
+        SIGNAL SQLSTATE '45000' SET MESSAGE_TEXT = '会员不存在或已被删除';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM 销售单表 WHERE 会员ID = p_会员ID) THEN
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = '该会员已有消费记录，为保证历史数据完整性不能删除';
+    END IF;
+
+    DELETE FROM 会员表 WHERE 会员ID = p_会员ID;
+END //
+DELIMITER ;
+
+
 -- 创建商品价格检查触发器
 DELIMITER //
 CREATE TRIGGER 检查商品价格
@@ -468,6 +504,7 @@ GRANT SELECT, INSERT ON 超市销售管理系统.销售明细表 TO '收银员'@
 GRANT SELECT ON 超市销售管理系统.商品表 TO '收银员'@'localhost';  -- 商品查询权限
 GRANT SELECT ON 超市销售管理系统.会员表 TO '收银员'@'localhost';  -- 会员查询权限
 GRANT EXECUTE ON PROCEDURE 超市销售管理系统.处理销售 TO '收银员'@'localhost';  -- 执行销售流程权限
+GRANT EXECUTE ON PROCEDURE 超市销售管理系统.删除会员 TO '收银员'@'localhost';  -- 删除无消费记录的会员
 GRANT SELECT ON `超市销售管理系统`.* TO '收银员'@'localhost';   -- 所有select权限
 
 -- 设置库存管理员权限
@@ -476,6 +513,7 @@ GRANT SELECT, INSERT ON 超市销售管理系统.进货单表 TO '库存员'@'lo
 GRANT SELECT, INSERT ON 超市销售管理系统.进货明细表 TO '库存员'@'localhost';  -- 进货明细权限
 GRANT SELECT ON 超市销售管理系统.供应商表 TO '库存员'@'localhost';  -- 供应商查询权限
 GRANT EXECUTE ON PROCEDURE 超市销售管理系统.处理进货 TO '库存员'@'localhost';  -- 执行进货流程权限
+GRANT EXECUTE ON PROCEDURE 超市销售管理系统.删除商品 TO '库存员'@'localhost';  -- 删除无业务历史的商品
 GRANT SELECT ON `超市销售管理系统`.* TO '库存员'@'localhost';   -- 所有select权限
 
 -- 设置经理权限(所有权限)

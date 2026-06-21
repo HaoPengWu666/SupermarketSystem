@@ -112,10 +112,12 @@ void member_widget::setup_connections()
     // 操作按钮
     auto *btnAddMember = m_member_page->findChild<QPushButton*>("btnAddMember_m");
     auto *btnEditMember = m_member_page->findChild<QPushButton*>("btnEditMember_m");
+    auto *btnDeleteMember = m_member_page->findChild<QPushButton*>("btnDeleteMember_m");
     auto *btnRefresh = m_member_page->findChild<QPushButton*>("btnRefresh_m");
 
     if (btnAddMember) connect(btnAddMember, &QPushButton::clicked, this, &member_widget::on_add_member_clicked);
     if (btnEditMember) connect(btnEditMember, &QPushButton::clicked, this, &member_widget::on_edit_member_clicked);
+    if (btnDeleteMember) connect(btnDeleteMember, &QPushButton::clicked, this, &member_widget::on_delete_member_clicked);
     if (btnRefresh) connect(btnRefresh, &QPushButton::clicked, this, &member_widget::on_refresh_clicked);
 }
 
@@ -354,6 +356,45 @@ void member_widget::on_edit_member_clicked()
             QMessageBox::critical(this, "错误", "更新会员信息失败: " + updateQuery.lastError().text());
         }
     }
+}
+
+void member_widget::on_delete_member_clicked()
+{
+    auto *tblMember = m_member_page->findChild<QTableView*>("tblMember_m");
+    if (!tblMember || !tblMember->selectionModel()) return;
+
+    const QModelIndexList selected = tblMember->selectionModel()->selectedRows();
+    if (selected.isEmpty()) {
+        QMessageBox::warning(this, "警告", "请先选择要删除的会员");
+        return;
+    }
+
+    const int row = selected.first().row();
+    const int memberId = m_member_model->item(row, 0)->text().toInt();
+    const QString memberName = m_member_model->item(row, 1)->text();
+    const auto answer = QMessageBox::question(
+        this,
+        "确认删除会员",
+        QString("确定要删除会员“%1”（ID：%2）吗？\n此操作不可撤销。")
+            .arg(memberName)
+            .arg(memberId),
+        QMessageBox::Yes | QMessageBox::No,
+        QMessageBox::No);
+    if (answer != QMessageBox::Yes) return;
+
+    QSqlQuery query;
+    query.prepare("CALL 删除会员(?)");
+    query.addBindValue(memberId);
+    if (!query.exec()) {
+        QMessageBox::critical(this, "删除失败", query.lastError().text());
+        return;
+    }
+    do {
+        while (query.next()) {}
+    } while (query.nextResult());
+
+    QMessageBox::information(this, "删除成功", "会员已删除");
+    refresh();
 }
 
 void member_widget::on_refresh_clicked()

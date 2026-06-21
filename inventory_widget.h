@@ -24,6 +24,7 @@ private slots:
     void on_search_inventory();       // 搜索商品
     void on_stock_in_clicked();        // 进货按钮点击
     void on_edit_product_clicked();    // 编辑商品点击
+    void on_delete_product_clicked();  // 删除商品点击
     void on_add_product_clicked();     // 添加商品点击
     void on_refresh_clicked();        // 刷新按钮点击
 
